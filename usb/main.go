@@ -54,6 +54,22 @@ var ignoredDirs = map[string]struct{}{
 	"/run":     {},
 	"/tmp":     {},
 	"/var/tmp": {},
+	// macOS specific directories - system and protected locations
+	"/System": {},
+	"/Library/Application Support/com.apple.TCC": {},
+	"/Library/Containers":                        {},
+	"/Library/Group Containers":                  {},
+	"/Library/PrivateFrameworks":                 {},
+	"/private":                                   {},
+	"/usr":                                       {},
+	"/bin":                                       {},
+	"/sbin":                                      {},
+	"/var":                                       {},
+	"/Volumes":                                   {},
+	"/.fseventsd":                                {},
+	"/.Spotlight-V100":                           {},
+	"/.Trashes":                                  {},
+	"/.vol":                                      {},
 }
 
 // FileMetadata holds information about a single scanned file.
@@ -107,6 +123,22 @@ func isIgnored(path string) bool {
 			return true
 		}
 	}
+
+	// Additional user-specific protected directories on macOS
+	if runtime.GOOS == "darwin" {
+		// Skip user Library containers and group containers
+		if strings.Contains(lowerPath, "/library/containers/") ||
+			strings.Contains(lowerPath, "/library/group containers/") ||
+			strings.Contains(lowerPath, "/library/application support/com.apple.tcc/") ||
+			strings.Contains(lowerPath, "/library/keychains/") ||
+			strings.Contains(lowerPath, "/library/logs/") ||
+			strings.Contains(lowerPath, "/library/caches/com.apple.") ||
+			strings.Contains(lowerPath, "/.com.apple.containermanagerd.metadata.plist") {
+
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -130,11 +162,17 @@ func fileProcessor(id int, wg *sync.WaitGroup, jobs <-chan string, results chan<
 			continue
 		}
 
+		// Skip directories - do not calculate SHA256 hash for directories
+		if stat.IsDir() {
+			continue
+		}
+
 		// Calculate SHA256 hash of the file
 		hash := sha256.New()
 		file, err := os.Open(path)
 		if err != nil {
-			errorLogger.Printf("Worker %d: Failed to open file for hashing %s: %v", id, path, err)
+			//when have no privilage to open the file, sipp - option later to write into seperate log
+			///errorLogger.Printf("Worker %d: Failed to open file for hashing %s: %v", id, path, err)
 			continue
 		}
 		_, err = io.Copy(hash, file)
@@ -438,6 +476,7 @@ resultLoop:
 
 	close(quitProgress) // Stop the progress reporter
 	infoLogger.Println("--- Scan Complete ---")
+	infoLogger.Println("--- Summery :")
 	infoLogger.Printf("Total files processed: %d", atomic.LoadUint64(&filesProcessed))
 	infoLogger.Printf("Total files written: %d", atomic.LoadUint64(&filesWritten))
 	infoLogger.Printf("Total bulks created: %d", atomic.LoadUint64(&bulksCreated))
