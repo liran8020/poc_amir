@@ -1,3 +1,7 @@
 # Ignore JSON files
 *.json
 *.iml
+*.log
+vcs.xml
+modules.xml
+workspace.xml

@@ -2,3 +2,7 @@
 *.json
 *.bin
 *.iml
+*.log
+vcs.xml
+modules.xml
+workspace.xml
