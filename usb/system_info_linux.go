@@ -1,6 +1,6 @@
 //go:build linux
 
-package usb
+package main
 
 import (
 	"os/exec"

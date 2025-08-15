@@ -1,0 +1,3 @@
+# Ignore JSON files
+*.json
+*.iml

@@ -42,14 +42,27 @@ This creates `filescanner` (or `filescanner.exe` on Windows).
 
 Copy the executable to a USB drive or any location and run it from the command line with flags.
 
-**Example on Linux:**
+
+## Example with limit
+./filescanner -scanner="John Doe" -laptop="DELL-XPS15" -out="./out" -p=8 --bulk=200 -limit=500
+
+
+
+** Example on Linux:**
 ```bash
-./filescanner -scanner="John Doe" -laptop="DELL-XPS15" -out="/media/user/MY_USB/scan_results" -p=8
+sudo ./filescanner -scanner="John Doe" -laptop="DELL-XPS15" -out="./out" -p=8 -limit=10
+
+./filescanner -scanner="John Doe" -laptop="DELL-XPS15" -out=./out -p=8 --bulk=5000 -limit=3
+
+./filescanner -scanner="John Doe" -laptop="DELL-XPS15" -out=/Users/liran/Documents/dev/go/poc/amir/usb -p=8 --bulk=5000 -limit=3
 
 sudo ./filescanner -scanner="John Doe" -laptop="DELL-XPS15" -out="/Users/liran/Documents/dev/go/poc_amir/2/out" -p=8 -limit=3
 ```
 
 **Example on Windows:**
+
+.\filescanner.exe -scanner="Jane Doe" -laptop="HP-SPECTRE"
+
 ```powershell
 .\filescanner.exe -scanner="Jane Doe" -laptop="HP-SPECTRE" -out="E:\scan_results" -p=4 -bulk=1000
 ```
@@ -70,10 +83,11 @@ To verify the code's correctness, run the tests from the project directory:
 go test -v
 ```
 
-==compile to windows
+## Build to windows
 GOOS=windows GOARCH=amd64 go build -o filescanner.exe
-==compile to mac intel
+
+## Build to mac intel
 GOOS=darwin GOARCH=amd64 go build -o filescanner main.go
 
-==compile to mac new (arm64)
+## Build to mac new (arm64)
 GOOS=darwin GOARCH=arm64 go build -o filescanner main.go
