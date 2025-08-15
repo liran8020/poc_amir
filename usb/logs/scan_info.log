@@ -1,0 +1,11 @@
+INFO: 2025/08/15 21:51:17 --- Starting File Scanner ---
+INFO: 2025/08/15 21:51:17 Config: Scanner=John Doe, Laptop=DELL-XPS15, Output=./out, BulkSize=1000, Parallelism=20, FileLimit=0
+INFO: 2025/08/15 21:51:17 Cryptographic keys loaded successfully.
+INFO: 2025/08/15 21:51:17 Collected system info. HardDriveID: 4D8DE757-BC6C-4747-BB6E-E99300A146F8, Apps Found: 11
+INFO: 2025/08/15 21:51:17 Starting filesystem walk on: /Users
+INFO: 2025/08/15 21:51:21 Writing final batch with 18 files.
+INFO: 2025/08/15 21:51:21 --- Scan Complete ---
+INFO: 2025/08/15 21:51:21 --- Summery :
+INFO: 2025/08/15 21:51:21 Total files processed: 28018
+INFO: 2025/08/15 21:51:21 Total files written: 28018
+INFO: 2025/08/15 21:51:21 Total bulks created: 29

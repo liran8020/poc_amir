@@ -73,6 +73,7 @@ sudo ./filescanner -scanner="John Doe" -laptop="DELL-XPS15" -out="/Users/liran/D
 - `-out`: The output path for logs and data (e.g., your USB key).
 - `-p`: (Optional) Number of parallel threads to use. Defaults to the number of CPU cores.
 - `-bulk`: (Optional) Number of file records per output file. Defaults to 500.
+- `-limit`: (Optional) max files number to scan. Defaults to all files.
 
 ## 4. Run Tests
 
