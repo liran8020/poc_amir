@@ -156,7 +156,7 @@ func worker(id int, wg *sync.WaitGroup, jobs <-chan string, targetDir string, se
 		}
 
 		// Write the decrypted JSON to the target directory
-		newFileName := strings.Replace(filepath.Base(jobPath), ".json", ".json", 1)
+		newFileName := strings.Replace(filepath.Base(jobPath), ".bin", ".json", 1)
 		targetPath := filepath.Join(targetDir, newFileName)
 		err = os.WriteFile(targetPath, prettyJSON.Bytes(), 0644)
 		if err != nil {
@@ -197,7 +197,7 @@ func ProcessFiles(sourceDir string, targetDir string, parallelism int) {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".json") {
+		if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".bin") {
 			jobs <- path
 		}
 		return nil

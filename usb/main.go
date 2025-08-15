@@ -42,9 +42,9 @@ var (
 // ignoredDirs contains system directories to skip for efficiency and relevance.
 var ignoredDirs = map[string]struct{}{
 	// Windows specific directories
-	"C:\\Windows":             {},
-	"C:\\Program Files":       {},
-	"C:\\Program Files (x86)": {},
+	"C:\\Windows": {},
+	//"C:\\Program Files":       {},
+	//"C:\\Program Files (x86)": {},
 	//"C:\\$Recycle.Bin":              {},
 	//"C:\\System Volume Information": {},
 	// Linux specific directories
@@ -58,9 +58,10 @@ var ignoredDirs = map[string]struct{}{
 
 // FileMetadata holds information about a single scanned file.
 type FileMetadata struct {
-	Path    string    `json:"path"`
-	ModTime time.Time `json:"mod_time"`
-	Size    int64     `json:"size"`
+	Path       string    `json:"path"`
+	ModTime    time.Time `json:"mod_time"`
+	Size       int64     `json:"size"`
+	SHA256Hash string    `json:"sha256_hash"`
 }
 
 // ScanOutput is the top-level structure for the JSON output file.
@@ -110,13 +111,13 @@ func isIgnored(path string) bool {
 }
 
 // fileProcessor is a worker that processes files from a channel.
-func fileProcessor(id int, wg *sync.WaitGroup, jobs <-chan string, results chan<- FileMetadata, filesProcessed *uint64, fileLimit int, limitReached chan<- struct{}) {
+func fileProcessor(id int, wg *sync.WaitGroup, jobs <-chan string, results chan<- FileMetadata, filesProcessed *uint64, fileLimit int, limitReached chan<- struct{}, closeOnce *sync.Once) {
 	defer wg.Done()
 	for path := range jobs {
 		if fileLimit > 0 {
 			currentProcessed := atomic.LoadUint64(filesProcessed)
 			if currentProcessed >= uint64(fileLimit) {
-				close(limitReached)
+				closeOnce.Do(func() { close(limitReached) })
 				return
 			}
 		}
@@ -129,15 +130,33 @@ func fileProcessor(id int, wg *sync.WaitGroup, jobs <-chan string, results chan<
 			continue
 		}
 
+		// Calculate SHA256 hash of the file
+		hash := sha256.New()
+		file, err := os.Open(path)
+		if err != nil {
+			errorLogger.Printf("Worker %d: Failed to open file for hashing %s: %v", id, path, err)
+			continue
+		}
+		_, err = io.Copy(hash, file)
+		if closeErr := file.Close(); closeErr != nil {
+			errorLogger.Printf("Worker %d: Failed to close file %s: %v", id, path, closeErr)
+		}
+		if err != nil {
+			errorLogger.Printf("Worker %d: Failed to compute hash for file %s: %v", id, path, err)
+			continue
+		}
+		fileHash := hash.Sum(nil)
+
 		results <- FileMetadata{
-			Path:    path,
-			ModTime: stat.ModTime(),
-			Size:    stat.Size(),
+			Path:       path,
+			ModTime:    stat.ModTime(),
+			Size:       stat.Size(),
+			SHA256Hash: fmt.Sprintf("%x", fileHash),
 		}
 
 		newCount := atomic.AddUint64(filesProcessed, 1)
 		if fileLimit > 0 && newCount >= uint64(fileLimit) {
-			close(limitReached)
+			closeOnce.Do(func() { close(limitReached) })
 			return
 		}
 	}
@@ -271,10 +290,11 @@ func main() {
 
 	// Create a channel to signal when file limit is reached
 	limitReached := make(chan struct{})
+	var closeOnce sync.Once
 
 	for w := 1; w <= *parallelism; w++ {
 		wg.Add(1)
-		go fileProcessor(w, &wg, jobs, results, &filesProcessed, *fileLimit, limitReached)
+		go fileProcessor(w, &wg, jobs, results, &filesProcessed, *fileLimit, limitReached, &closeOnce)
 	}
 
 	// --- 4. Start File System Traversal ---
@@ -307,7 +327,7 @@ func main() {
 						}
 
 						if atomic.LoadUint64(&filesProcessed) >= uint64(*fileLimit) && *fileLimit > 0 {
-							close(limitReached)
+							closeOnce.Do(func() { close(limitReached) })
 							return filepath.SkipAll
 						}
 
@@ -358,6 +378,13 @@ func main() {
 
 	// --- 6. Collect Results and Write Bulks ---
 	var fileBatch []FileMetadata
+
+	// Start a goroutine to close results channel when all workers are done
+	go func() {
+		wg.Wait()      // Wait for all processor goroutines to finish
+		close(results) // Close results channel to signal completion
+	}()
+
 resultLoop:
 	for {
 		select {
@@ -370,10 +397,38 @@ resultLoop:
 				writeBulk(fileBatch, *outputPath, *scannerName, *laptopID, hardDriveID, installedApps, &bulksCreated, &filesWritten, serverPubKey, scannerPrivKey)
 				fileBatch = nil // Reset batch
 			}
+		case <-limitReached:
+			// If limit is reached, drain any remaining results and exit
+			for {
+				select {
+				case result, ok := <-results:
+					if !ok {
+						break resultLoop
+					}
+					fileBatch = append(fileBatch, result)
+					if len(fileBatch) >= *bulkSize {
+						writeBulk(fileBatch, *outputPath, *scannerName, *laptopID, hardDriveID, installedApps, &bulksCreated, &filesWritten, serverPubKey, scannerPrivKey)
+						fileBatch = nil
+					}
+				default:
+					// No more results immediately available, wait for workers to finish
+					wg.Wait()
+					// Drain any final results
+					for {
+						select {
+						case result, ok := <-results:
+							if !ok {
+								break resultLoop
+							}
+							fileBatch = append(fileBatch, result)
+						default:
+							break resultLoop
+						}
+					}
+				}
+			}
 		}
 	}
-
-	wg.Wait() // Wait for all processor goroutines to finish
 
 	// Write any remaining files in the last batch
 	if len(fileBatch) > 0 {
@@ -411,7 +466,7 @@ func writeBulk(batch []FileMetadata, outPath, scannerName, laptopID, hdID string
 	}
 
 	bulkNum := atomic.AddUint64(bulks, 1)
-	filename := filepath.Join(outPath, fmt.Sprintf("scan_data_%d.json", bulkNum))
+	filename := filepath.Join(outPath, fmt.Sprintf("scan_data_%d.bin", bulkNum))
 
 	err = os.WriteFile(filename, encryptedData, 0644)
 	if err != nil {
